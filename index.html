@@ -1,172 +1,195 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Teleradiology Agent | Uganda AI Fest 2026</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        .priority-blink { animation: blink 1.5s infinite; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        .network-status-online { color: #10b981; }
-        .network-status-offline { color: #ef4444; }
-    </style>
-</head>
-<body class="bg-gray-50 font-sans">
-
-    <!-- Navigation -->
-    <nav class="bg-blue-900 text-white p-4 shadow-lg">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold flex items-center">
-                <i class="fas fa-microscope mr-2"></i> AI Teleradiology Agent
-            </h1>
-            <div id="network-status" class="flex items-center text-sm">
-                <i class="fas fa-circle mr-2 network-status-online"></i> System Online (Uganda Node )
-            </div>
-        </div>
-    </nav>
-
-    <div class="container mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        <!-- Left Column: Upload & Controls -->
-        <div class="lg:col-span-1 space-y-6">
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <h2 class="text-lg font-semibold mb-4 text-gray-800">Upload New Scan</h2>
-                <div id="drop-zone" class="border-2 border-dashed border-blue-200 rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer">
-                    <i class="fas fa-cloud-upload-alt text-4xl text-blue-400 mb-3"></i>
-                    <p class="text-gray-600 text-sm">Drag & Drop DICOM Files or Click to Browse</p>
-                    <input type="file" id="file-input" class="hidden" accept=".dcm">
-                </div>
-                
-                <div class="mt-4 space-y-3">
-                    <button onclick="simulateDisruption()" class="w-full py-2 px-4 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium hover:bg-orange-200 transition">
-                        <i class="fas fa-wifi-slash mr-2"></i> Simulate Network Disruption
-                    </button>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>AI Teleradiology Agent | Uganda AI Fest 2026</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            /* small local helpers */
+            .priority-blink { animation: blink 1.4s infinite; }
+            @keyframes blink { 0% { opacity: 1 } 50% { opacity: 0.5 } 100% { opacity: 1 } }
+        </style>
+    </head>
+    <body class="bg-gray-50 text-gray-800 antialiased">
+        <!-- Header -->
+        <header class="bg-white border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center gap-3">
+                        <!-- simple inline SVG logo -->
+                        <svg class="h-8 w-8 text-blue-600" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/>
+                            <path d="M14 14l6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                        <h1 class="text-lg font-semibold">AI Teleradiology Agent</h1>
+                        <span class="ml-2 text-sm text-gray-500">Uganda AI Fest 2026</span>
+                    </div>
+                    <div id="network-status" class="text-sm text-gray-600 flex items-center gap-2" aria-live="polite">
+                        <svg id="network-dot" class="h-3 w-3 text-emerald-500" viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
+                        <span>System Online (Uganda Node)</span>
+                    </div>
                 </div>
             </div>
+        </header>
 
-            <div class="bg-blue-50 p-6 rounded-xl border border-blue-100">
-                <h3 class="font-semibold text-blue-900 mb-2">Agent Reasoning Stats</h3>
-                <div class="space-y-2 text-sm text-blue-800">
-                    <div class="flex justify-between"><span>Avg. Turnaround:</span> <span class="font-bold">14.4 Hours</span></div>
-                    <div class="flex justify-between"><span>Accuracy Gain:</span> <span class="font-bold">+25%</span></div>
-                    <div class="flex justify-between"><span>Resilience:</span> <span class="font-bold">Auto-Sync Enabled</span></div>
-                </div>
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left column: upload + stats -->
+                <section class="lg:col-span-1 space-y-6">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <h2 class="text-lg font-medium mb-3">Upload New Scan</h2>
+                        <div id="drop-zone" class="flex flex-col items-center justify-center gap-3 p-6 border-2 border-dashed rounded-lg cursor-pointer hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-300" role="button" tabindex="0">
+                            <svg class="h-10 w-10 text-blue-500" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M16 16l4-4-4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 16V8c0-1.1.9-2 2-2h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            <p class="text-sm text-gray-600">Drag & drop DICOM (.dcm) files here, or click to browse</p>
+                            <input id="file-input" type="file" accept=".dcm" class="sr-only" />
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-1 gap-3">
+                            <button id="simulate-btn" class="w-full inline-flex items-center justify-center gap-2 rounded-md bg-orange-100 text-orange-700 px-4 py-2 text-sm hover:bg-orange-200">
+                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none"><path d="M12 2v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 16v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                                Simulate Network Disruption
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-2">Agent Reasoning Stats</h3>
+                        <dl class="grid grid-cols-1 gap-2 text-sm text-gray-700">
+                            <div class="flex justify-between"><span>Avg. Turnaround</span><span class="font-medium">14.4 Hours</span></div>
+                            <div class="flex justify-between"><span>Accuracy Gain</span><span class="font-medium">+25%</span></div>
+                            <div class="flex justify-between"><span>Resilience</span><span class="font-medium">Auto-Sync</span></div>
+                        </dl>
+                    </div>
+                </section>
+
+                <!-- Right column: worklist -->
+                <section class="lg:col-span-2">
+                    <div class="bg-white rounded-lg shadow-sm border overflow-hidden">
+                        <div class="px-6 py-4 border-b flex items-center justify-between">
+                            <h2 class="text-md font-semibold">Radiologist Worklist</h2>
+                            <span class="inline-flex items-center bg-blue-600 text-white text-xs rounded-full px-2 py-1">Live</span>
+                        </div>
+
+                        <div class="p-4 overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead class="text-xs text-gray-500 uppercase">
+                                    <tr>
+                                        <th class="px-4 py-2">Status</th>
+                                        <th class="px-4 py-2">Patient ID</th>
+                                        <th class="px-4 py-2">AI Finding</th>
+                                        <th class="px-4 py-2">Confidence</th>
+                                        <th class="px-4 py-2">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="worklist-body" class="text-sm">
+                                    <tr class="border-t">
+                                        <td class="px-4 py-3"><span class="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">Routine</span></td>
+                                        <td class="px-4 py-3 font-medium">UG-7721</td>
+                                        <td class="px-4 py-3 text-gray-600">Normal Scan</td>
+                                        <td class="px-4 py-3">98.2%</td>
+                                        <td class="px-4 py-3"><button class="text-blue-600 hover:underline text-sm">View</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div id="loading-spinner" class="hidden mt-6 text-center text-sm text-gray-500">
+                                <svg class="mx-auto h-6 w-6 animate-spin text-blue-600" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25" stroke-width="4"/><path d="M22 12a10 10 0 00-10-10" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
+                                <p class="mt-2">AI Agent is reasoning about the image...</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </div>
-        </div>
+        </main>
 
-        <!-- Right Column: Prioritized Worklist -->
-        <div class="lg:col-span-2">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div class="bg-gray-100 p-4 border-b border-gray-200 flex justify-between items-center">
-                    <h2 class="font-semibold text-gray-800">Radiologist Worklist (AI Prioritized)</h2>
-                    <span class="text-xs bg-blue-600 text-white px-2 py-1 rounded-full">Live Updates</span>
-                </div>
-                <table class="w-full text-left">
-                    <thead class="bg-gray-50 text-xs uppercase text-gray-500">
-                        <tr>
-                            <th class="p-4">Status</th>
-                            <th class="p-4">Patient ID</th>
-                            <th class="p-4">AI Finding</th>
-                            <th class="p-4">Confidence</th>
-                            <th class="p-4">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="worklist-body">
-                        <!-- Example Row -->
-                        <tr class="border-b border-gray-100 hover:bg-gray-50">
-                            <td class="p-4"><span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">Routine</span></td>
-                            <td class="p-4 font-medium">UG-7721</td>
-                            <td class="p-4 text-gray-600">Normal Scan</td>
-                            <td class="p-4 text-gray-600">98.2%</td>
-                            <td class="p-4"><button class="text-blue-600 hover:underline">View</button></td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div id="loading-spinner" class="hidden p-8 text-center">
-                    <i class="fas fa-spinner fa-spin text-blue-600 text-2xl mb-2"></i>
-                    <p class="text-sm text-gray-500">AI Agent is reasoning about the image...</p>
-                </div>
-            </div>
-        </div>
-    </div>
+        <script>
+            // Config: placeholder. For production, replace or fetch from /config.json
+            const API_URL = 'YOUR_NGROK_API_URL';
 
-    <script>
-        const API_URL = "YOUR_NGROK_API_URL"; // Replace with your Ngrok URL from Colab
-        const worklistBody = document.getElementById('worklist-body');
-        const fileInput = document.getElementById('file-input');
-        const dropZone = document.getElementById('drop-zone');
-        const spinner = document.getElementById('loading-spinner');
-        let isOnline = true;
+            const worklistBody = document.getElementById('worklist-body');
+            const fileInput = document.getElementById('file-input');
+            const dropZone = document.getElementById('drop-zone');
+            const spinner = document.getElementById('loading-spinner');
+            const networkStatus = document.getElementById('network-status');
+            const networkDot = document.getElementById('network-dot');
+            const simulateBtn = document.getElementById('simulate-btn');
 
-        // Handle File Selection
-        dropZone.onclick = () => fileInput.click();
-        fileInput.onchange = (e) => handleUpload(e.target.files[0]);
+            let isOnline = true;
 
-        async function handleUpload(file) {
-            if (!file) return;
-            if (!isOnline) {
-                alert("Network Disrupted! The AI Agent has queued this file for automatic upload when connectivity returns.");
-                addToWorklist({ diagnosis: "Queued (Offline)", confidence: "N/A", status: "Offline" }, "UG-NEW");
-                return;
+            // Accessibility: open file dialog on click or Enter/Space
+            dropZone.addEventListener('click', () => fileInput.click());
+            dropZone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+
+            // Basic drag & drop handlers
+            dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-blue-300'); });
+            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-blue-300'));
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault(); dropZone.classList.remove('border-blue-300');
+                const file = e.dataTransfer.files[0];
+                if (file) handleUpload(file);
+            });
+
+            fileInput.addEventListener('change', (e) => handleUpload(e.target.files[0]));
+
+            async function handleUpload(file) {
+                if (!file) return;
+                if (!isOnline) {
+                    alert('Network Disrupted — file queued for later sync.');
+                    addToWorklist({ diagnosis: 'Queued (Offline)', confidence: 'N/A', status: 'Offline' }, 'UG-NEW');
+                    return;
+                }
+
+                spinner.classList.remove('hidden');
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const res = await fetch(`${API_URL}/analyze`, { method: 'POST', body: formData });
+                    const data = await res.json();
+                    addToWorklist(data, 'UG-' + Math.floor(Math.random() * 9000 + 1000));
+                } catch (err) {
+                    console.error(err);
+                    alert('Unable to reach AI Agent. Check your backend endpoint.');
+                } finally {
+                    spinner.classList.add('hidden');
+                    fileInput.value = '';
+                }
             }
 
-            spinner.classList.remove('hidden');
-            
-            const formData = new FormData();
-            formData.append('file', file);
+            function addToWorklist(data, patientId) {
+                const isPriority = data.status === 'Priority';
+                const tr = document.createElement('tr');
+                tr.className = 'border-t';
 
-            try {
-                const response = await fetch(`${API_URL}/analyze`, {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                addToWorklist(data, "UG-" + Math.floor(Math.random() * 9000 + 1000));
-            } catch (error) {
-                console.error("API Error:", error);
-                alert("Error connecting to AI Agent. Check if Colab is running.");
-            } finally {
-                spinner.classList.add('hidden');
+                tr.innerHTML = `
+                    <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs font-semibold ${isPriority ? 'bg-red-600 text-white priority-blink' : 'bg-gray-100 text-gray-700'}">${data.status}</span></td>
+                    <td class="px-4 py-3 font-medium">${patientId}</td>
+                    <td class="px-4 py-3 text-gray-700 font-medium">${data.diagnosis}</td>
+                    <td class="px-4 py-3">${data.confidence}%</td>
+                    <td class="px-4 py-3"><button class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">Review</button></td>
+                `;
+
+                if (isPriority) worklistBody.prepend(tr); else worklistBody.appendChild(tr);
             }
-        }
 
-        function addToWorklist(data, patientId) {
-            const isPriority = data.status === "Priority";
-            const row = document.createElement('tr');
-            row.className = `border-b border-gray-100 hover:bg-gray-50 ${isPriority ? 'bg-red-50' : ''}`;
-            
-            row.innerHTML = `
-                <td class="p-4">
-                    <span class="px-2 py-1 rounded text-xs font-bold ${isPriority ? 'bg-red-600 text-white priority-blink' : 'bg-gray-100 text-gray-600'}">
-                        ${data.status}
-                    </span>
-                </td>
-                <td class="p-4 font-medium">${patientId}</td>
-                <td class="p-4 text-gray-700 font-semibold">${data.diagnosis}</td>
-                <td class="p-4 text-gray-600">${data.confidence}%</td>
-                <td class="p-4"><button class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">Review</button></td>
-            `;
-
-            if (isPriority) {
-                worklistBody.prepend(row); // Move to top of list
-            } else {
-                worklistBody.appendChild(row);
+            function updateNetworkUI() {
+                if (isOnline) {
+                    networkDot.classList.remove('text-red-500'); networkDot.classList.add('text-emerald-500');
+                    networkStatus.querySelector('span')?.remove();
+                    networkStatus.insertAdjacentHTML('beforeend', '<span>System Online (Uganda Node)</span>');
+                } else {
+                    networkDot.classList.remove('text-emerald-500'); networkDot.classList.add('text-red-500');
+                    networkStatus.querySelector('span')?.remove();
+                    networkStatus.insertAdjacentHTML('beforeend', '<span>Network Disrupted</span>');
+                }
             }
-        }
 
-        function simulateDisruption() {
-            isOnline = !isOnline;
-            const statusDiv = document.getElementById('network-status');
-            if (isOnline) {
-                statusDiv.innerHTML = '<i class="fas fa-circle mr-2 network-status-online"></i> System Online (Uganda Node)';
-                alert("Connectivity Restored. Agent is synchronizing data...");
-            } else {
-                statusDiv.innerHTML = '<i class="fas fa-circle mr-2 network-status-offline"></i> Network Disrupted';
-                alert("Connectivity Lost. Agent switched to Offline Resilience Mode.");
-            }
-        }
-    </script>
-</body>
+            simulateBtn.addEventListener('click', () => {
+                isOnline = !isOnline; updateNetworkUI();
+                alert(isOnline ? 'Connectivity Restored. Agent synchronizing.' : 'Connectivity Lost. Offline mode enabled.');
+            });
+        </script>
+    </body>
 </html>
