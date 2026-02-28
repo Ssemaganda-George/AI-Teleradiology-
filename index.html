@@ -83,7 +83,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="worklist-body" class="text-sm">
-                                    <tr class="border-t" data-patient-id="UG-7721" data-status="Routine" data-diagnosis="Normal Scan" data-confidence="98.2">
+                                    <tr class="border-t" data-patient-id="UG-7721" data-status="Routine" data-diagnosis="Normal Scan" data-confidence="98.2" data-explanation="No additional details available.">
                                         <td class="px-4 py-3"><span class="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">Routine</span></td>
                                         <td class="px-4 py-3 font-medium">UG-7721</td>
                                         <td class="px-4 py-3 text-gray-600">Normal Scan</td>
@@ -171,23 +171,34 @@
                 }
             }
 
+                    // addToWorklist: create a row and attach data for the review modal
                     function addToWorklist(data, patientId) {
-                        const isPriority = data.status === 'Priority';
+                        const isPriority = data.status === "Priority";
                         const tr = document.createElement('tr');
-                        tr.className = 'border-t';
+                        tr.className = `border-b border-gray-100 hover:bg-gray-50 ${isPriority ? 'bg-red-50' : ''}`;
 
-                        // store item data on the row for the review modal
+                        // store data on the row for later (modal will read row.dataset)
                         tr.dataset.patientId = patientId;
                         tr.dataset.status = data.status || '';
                         tr.dataset.diagnosis = data.diagnosis || '';
                         tr.dataset.confidence = data.confidence || '';
+                        tr.dataset.explanation = data.explanation || 'No additional details available.';
 
                         tr.innerHTML = `
-                            <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs font-semibold ${isPriority ? 'bg-red-600 text-white priority-blink' : 'bg-gray-100 text-gray-700'}">${data.status}</span></td>
-                            <td class="px-4 py-3 font-medium">${patientId}</td>
-                            <td class="px-4 py-3 text-gray-700 font-medium">${data.diagnosis}</td>
-                            <td class="px-4 py-3">${data.confidence}%</td>
-                            <td class="px-4 py-3"><button class="review-btn bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700" type="button">Review</button></td>
+                            <td class="p-4">
+                                <span class="px-2 py-1 rounded text-xs font-bold ${isPriority ? 'bg-red-600 text-white priority-blink' : 'bg-gray-100 text-gray-600'}">
+                                    ${data.status}
+                                </span>
+                            </td>
+                            <td class="p-4 font-medium">${patientId}</td>
+                            <td class="p-4">
+                                <div class="font-semibold text-gray-800">${data.diagnosis}</div>
+                                <div class="text-xs text-gray-500 italic mt-1">"${data.explanation || ''}"</div>
+                            </td>
+                            <td class="p-4 text-gray-600">${data.confidence}%</td>
+                            <td class="p-4">
+                                <button class="review-btn bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700" type="button">Review</button>
+                            </td>
                         `;
 
                         if (isPriority) worklistBody.prepend(tr); else worklistBody.appendChild(tr);
@@ -210,6 +221,7 @@
                         modal.querySelector('#modal-status').textContent = data.status || '';
                         modal.querySelector('#modal-diagnosis').textContent = data.diagnosis || '';
                         modal.querySelector('#modal-confidence').textContent = data.confidence ? data.confidence + '%' : '';
+                        modal.querySelector('#modal-explanation').textContent = data.explanation || '';
                         modal.classList.remove('hidden');
                         // trap focus to modal for accessibility
                         modal.querySelector('[data-autofocus]')?.focus();
@@ -256,6 +268,7 @@
                     <div><span class="text-sm text-gray-500">Status</span><div id="modal-status" class="font-medium"></div></div>
                     <div><span class="text-sm text-gray-500">AI Finding</span><div id="modal-diagnosis" class="font-medium"></div></div>
                     <div><span class="text-sm text-gray-500">Confidence</span><div id="modal-confidence" class="font-medium"></div></div>
+                    <div><span class="text-sm text-gray-500">AI Explanation</span><div id="modal-explanation" class="font-medium text-sm italic text-gray-600"></div></div>
                 </div>
                 <div class="p-4 border-t flex justify-end gap-2">
                     <button onclick="closeReviewModal()" class="px-4 py-2 rounded-md bg-gray-100">Close</button>
