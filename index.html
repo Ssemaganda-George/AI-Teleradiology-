@@ -23,7 +23,7 @@
                             <path d="M14 14l6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                         </svg>
                         <h1 class="text-lg font-semibold">AI Teleradiology Agent</h1>
-                        <span class="ml-2 text-sm text-gray-500">Uganda AI Fest 2026</span>
+                        <!-- <span class="ml-2 text-sm text-gray-500">Uganda AI Fest 2026</span> -->
                     </div>
                     <div id="network-status" class="text-sm text-gray-600 flex items-center gap-2" aria-live="polite">
                         <svg id="network-dot" class="h-3 w-3 text-emerald-500" viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
@@ -42,7 +42,7 @@
                         <div id="drop-zone" class="flex flex-col items-center justify-center gap-3 p-6 border-2 border-dashed rounded-lg cursor-pointer hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-300" role="button" tabindex="0">
                             <svg class="h-10 w-10 text-blue-500" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M16 16l4-4-4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 16V8c0-1.1.9-2 2-2h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                             <p class="text-sm text-gray-600">Drag & drop DICOM (.dcm/.dicom), TIFF (.tif/.tiff) or any image (jpg, jpeg, png, gif, webp, bmp, svg) here, or click to browse</p>
-                            <input id="file-input" type="file" accept="image/*,.dcm,.dicom,.dcim" class="sr-only" />
+                            <input id="file-input" type="file" accept="image/*,.dcm,.dicom,.dcim" multiple class="sr-only" />
                         </div>
 
                         <div class="mt-4 grid grid-cols-1 gap-3">
@@ -71,8 +71,13 @@
                             <span class="inline-flex items-center bg-blue-600 text-white text-xs rounded-full px-2 py-1">Live</span>
                         </div>
 
-                        <div class="p-4 overflow-x-auto">
-                            <table class="w-full text-left">
+                                                <div class="p-4">
+                                                        <!-- Mobile card view (hidden on md+) -->
+                                                        <div id="worklist-cards" class="md:hidden space-y-3"></div>
+
+                                                        <!-- Desktop table view (hidden on small screens) -->
+                                                        <div class="hidden md:block overflow-x-auto">
+                                                            <table class="w-full text-left">
                                 <thead class="text-xs text-gray-500 uppercase">
                                     <tr>
                                         <th class="px-4 py-2">Status</th>
@@ -90,10 +95,11 @@
                                         <td class="px-4 py-3">98.2%</td>
                                         <td class="px-4 py-3"><button class="review-btn text-blue-600 hover:underline text-sm" type="button">Review</button></td>
                                     </tr>
-                                </tbody>
-                            </table>
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
 
-                            <div id="loading-spinner" class="hidden mt-6 text-center text-sm text-gray-500">
+                                                        <div id="loading-spinner" class="hidden mt-6 text-center text-sm text-gray-500">
                                 <svg class="mx-auto h-6 w-6 animate-spin text-blue-600" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25" stroke-width="4"/><path d="M22 12a10 10 0 00-10-10" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>
                                 <p class="mt-2">AI Agent is reasoning about the image...</p>
                             </div>
@@ -198,10 +204,19 @@
                 if (file) handleUpload(file);
             });
 
-            fileInput.addEventListener('change', (e) => handleUpload(e.target.files[0]));
+            fileInput.addEventListener('change', (e) => handleUpload(e.target.files));
 
             async function handleUpload(file) {
                 if (!file) return;
+                // support FileList or multiple files selection
+                if (typeof FileList !== 'undefined' && file instanceof FileList) {
+                    for (const f of file) await handleUpload(f);
+                    return;
+                }
+                if (Array.isArray(file)) {
+                    for (const f of file) await handleUpload(f);
+                    return;
+                }
                 if (!isValidFile(file)) {
                     alert('Unsupported file type. Please upload a supported image (jpg/png/tif/...) or DICOM (.dcm) file.');
                     return;
@@ -271,11 +286,13 @@
                             </td>
                             <td class="p-4 text-gray-600">${data.confidence}%</td>
                             <td class="p-4">
-                                <button class="review-btn bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700" type="button">Review</button>
+                                <button class="review-btn bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 touch-manage" type="button">Review</button>
                             </td>
                         `;
 
                         if (isPriority) worklistBody.prepend(tr); else worklistBody.appendChild(tr);
+                        // Update mobile card list when a new row is added
+                        refreshResponsiveList();
                     }
 
                     // Event delegation: open review modal when any .review-btn is clicked
@@ -286,6 +303,67 @@
                         if (!row) return;
                         openReviewModal(row.dataset);
                     });
+
+                    // Mobile card list click handling (delegation)
+                    const worklistCards = document.getElementById('worklist-cards');
+                    worklistCards.addEventListener('click', (e) => {
+                        const btn = e.target.closest && e.target.closest('.review-btn');
+                        if (!btn) return;
+                        const card = btn.closest('[data-patient-id]');
+                        if (!card) return;
+                        openReviewModal(card.dataset);
+                    });
+
+                    // Build mobile-friendly card list from table rows
+                    function refreshResponsiveList() {
+                        const cards = [];
+                        const rows = Array.from(worklistBody.querySelectorAll('tr'));
+                        for (const r of rows) {
+                            const pid = r.dataset.patientId || '';
+                            const status = r.dataset.status || '';
+                            const diag = r.dataset.diagnosis || '';
+                            const conf = r.dataset.confidence || '';
+                            const expl = r.dataset.explanation || '';
+                            const queuedId = r.dataset.queuedId || '';
+
+                            const card = document.createElement('div');
+                            card.className = 'bg-white border rounded-lg p-4 shadow-sm';
+                            card.dataset.patientId = pid;
+                            card.dataset.status = status;
+                            card.dataset.diagnosis = diag;
+                            card.dataset.confidence = conf;
+                            card.dataset.explanation = expl;
+                            if (queuedId) card.dataset.queuedId = queuedId;
+
+                            card.innerHTML = `
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="text-sm text-gray-500">${status}</div>
+                                        <div class="font-medium text-lg">${pid}</div>
+                                        <div class="text-sm text-gray-700 mt-1">${diag}</div>
+                                        <div class="text-xs text-gray-500 italic mt-1">${expl}</div>
+                                    </div>
+                                    <div class="flex flex-col items-end gap-2">
+                                        <div class="text-sm text-gray-600">${conf}%</div>
+                                        <button class="review-btn bg-blue-600 text-white px-4 py-2 rounded text-sm">Review</button>
+                                    </div>
+                                </div>
+                            `;
+                            cards.push(card);
+                        }
+                        // replace contents
+                        worklistCards.innerHTML = '';
+                        for (const c of cards) worklistCards.appendChild(c);
+                    }
+
+                    // keep responsive list in sync on resize (debounced)
+                    let resizeTimer;
+                    window.addEventListener('resize', () => {
+                        clearTimeout(resizeTimer);
+                        resizeTimer = setTimeout(refreshResponsiveList, 200);
+                    });
+                    // initial build
+                    refreshResponsiveList();
 
                     // Modal markup is below in DOM; helper to open/close and populate
                             function openReviewModal(data) {
@@ -383,6 +461,8 @@
                                         <button class="review-btn bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700" type="button">Review</button>
                                     </td>
                                 `;
+                                // update mobile cards view as well
+                                refreshResponsiveList();
                             }
 
                             // remove upload record from IDB
@@ -410,6 +490,20 @@
                     networkStatus.querySelector('span')?.remove();
                     networkStatus.insertAdjacentHTML('beforeend', '<span>Network Disrupted</span>');
                 }
+                // Update modal Scan Now button state if modal is open
+                const modal = document.getElementById('review-modal');
+                if (modal && !modal.classList.contains('hidden')) {
+                    const scanBtn = document.getElementById('modal-scan-now');
+                    if (scanBtn) {
+                        if (modal.dataset.queuedId) {
+                            scanBtn.disabled = !isOnline;
+                            scanBtn.textContent = isOnline ? 'Scan Now' : 'Queued (offline)';
+                        } else {
+                            scanBtn.disabled = true;
+                            scanBtn.textContent = 'Scan Now';
+                        }
+                    }
+                }
             }
 
             simulateBtn.addEventListener('click', () => {
@@ -420,12 +514,12 @@
     
         <!-- Review modal -->
         <div id="review-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4">
-            <div class="bg-white rounded-lg w-full max-w-lg shadow-lg overflow-hidden">
+            <div class="bg-white rounded-lg w-full max-w-lg shadow-lg max-h-[90vh] overflow-auto">
                 <div class="p-4 border-b flex items-center justify-between">
                     <h3 class="text-lg font-semibold">Case Review</h3>
                     <button aria-label="Close review" onclick="closeReviewModal()" class="text-gray-500 hover:text-gray-800">✕</button>
                 </div>
-                <div class="p-4 space-y-3">
+                <div class="p-4 sm:p-6 space-y-3">
                     <div><span class="text-sm text-gray-500">Patient ID</span><div id="modal-patient-id" class="font-medium"></div></div>
                     <div><span class="text-sm text-gray-500">Status</span><div id="modal-status" class="font-medium"></div></div>
                     <div><span class="text-sm text-gray-500">AI Finding</span><div id="modal-diagnosis" class="font-medium"></div></div>
