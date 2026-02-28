@@ -378,11 +378,15 @@
                                 if (data.queuedId) modal.dataset.queuedId = data.queuedId; else delete modal.dataset.queuedId;
                                 const scanBtn = document.getElementById('modal-scan-now');
                                 if (scanBtn) {
+                                    // Only show Scan Now for queued uploads (uploaded while offline). If the item was uploaded while
+                                    // the agent was online, there is no queuedId and we hide the button entirely.
                                     if (modal.dataset.queuedId) {
-                                        // enable Scan Now only when a queuedId exists and we're online
+                                        scanBtn.classList.remove('hidden');
                                         scanBtn.disabled = !isOnline;
                                         scanBtn.textContent = isOnline ? 'Scan Now' : 'Queued (offline)';
                                     } else {
+                                        // hide Scan Now when not applicable
+                                        scanBtn.classList.add('hidden');
                                         scanBtn.disabled = true;
                                         scanBtn.textContent = 'Scan Now';
                                     }
@@ -468,9 +472,18 @@
                             // remove upload record from IDB
                             await deleteUploadRecord(queuedId);
 
+                            // remove queuedId from the row so modal hides Scan Now
+                            if (row && row.dataset && row.dataset.queuedId) {
+                                delete row.dataset.queuedId;
+                            }
+
+                            // update mobile cards view as well and refresh modal (Scan Now will be hidden)
+                            refreshResponsiveList();
+
                             scanBtn.textContent = 'Done';
                             setTimeout(() => { scanBtn.disabled = false; scanBtn.textContent = 'Scan Now'; }, 800);
-                            // refresh modal content to show result
+
+                            // refresh modal content to show result (openReviewModal will hide Scan Now because queuedId removed)
                             openReviewModal(row ? row.dataset : data);
                         } catch (err) {
                             console.error('Queued upload failed', err);
@@ -496,9 +509,13 @@
                     const scanBtn = document.getElementById('modal-scan-now');
                     if (scanBtn) {
                         if (modal.dataset.queuedId) {
+                            // ensure visible and enabled only if online
+                            scanBtn.classList.remove('hidden');
                             scanBtn.disabled = !isOnline;
                             scanBtn.textContent = isOnline ? 'Scan Now' : 'Queued (offline)';
                         } else {
+                            // hide when not applicable
+                            scanBtn.classList.add('hidden');
                             scanBtn.disabled = true;
                             scanBtn.textContent = 'Scan Now';
                         }
