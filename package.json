@@ -1,0 +1,12 @@
+{
+  "name": "ai-teleradiology-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Static UI for AI Teleradiology Agent (serves index.html)",
+  "scripts": {
+    "start": "npx http-server -c-1 -p 8000"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
