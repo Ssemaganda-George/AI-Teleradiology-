@@ -115,6 +115,65 @@
             const networkDot = document.getElementById('network-dot');
             const simulateBtn = document.getElementById('simulate-btn');
 
+            /* IndexedDB helper to store queued uploads when offline */
+            function openDB() {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open('ai-teleradiology', 1);
+                    req.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains('uploads')) {
+                            db.createObjectStore('uploads', { keyPath: 'id' });
+                        }
+                    };
+                    req.onsuccess = (e) => resolve(e.target.result);
+                    req.onerror = (e) => reject(e.target.error);
+                });
+            }
+
+            async function saveUploadRecord(record) {
+                const db = await openDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('uploads', 'readwrite');
+                    const store = tx.objectStore('uploads');
+                    const req = store.put(record);
+                    req.onsuccess = () => resolve(record.id);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+
+            async function getUploadRecord(id) {
+                const db = await openDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('uploads', 'readonly');
+                    const store = tx.objectStore('uploads');
+                    const req = store.get(id);
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+
+            async function deleteUploadRecord(id) {
+                const db = await openDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('uploads', 'readwrite');
+                    const store = tx.objectStore('uploads');
+                    const req = store.delete(id);
+                    req.onsuccess = () => resolve();
+                    req.onerror = () => reject(req.error);
+                });
+            }
+
+            async function listUploadRecords() {
+                const db = await openDB();
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('uploads', 'readonly');
+                    const store = tx.objectStore('uploads');
+                    const req = store.getAll();
+                    req.onsuccess = () => resolve(req.result || []);
+                    req.onerror = () => reject(req.error);
+                });
+            }
+
             // Allow DICOM and any common image formats
             function isValidFile(file) {
                 if (!file || !file.name) return false;
@@ -144,12 +203,26 @@
             async function handleUpload(file) {
                 if (!file) return;
                 if (!isValidFile(file)) {
-                    alert('Unsupported file type. Please upload .dcm or .tif/.tiff files.');
+                    alert('Unsupported file type. Please upload a supported image (jpg/png/tif/...) or DICOM (.dcm) file.');
                     return;
                 }
                 if (!isOnline) {
-                    alert('Network Disrupted — file queued for later sync.');
-                    addToWorklist({ diagnosis: 'Queued (Offline)', confidence: 'N/A', status: 'Offline' }, 'UG-NEW');
+                    // Save file to IndexedDB for later upload when online
+                    try {
+                        const id = 'q-' + Date.now();
+                        const record = {
+                            id,
+                            file,
+                            meta: { name: file.name, size: file.size, type: file.type, uploadedAt: Date.now() }
+                        };
+                        await saveUploadRecord(record);
+                        alert('Network Disrupted — file queued for later sync.');
+                        // show queued entry in worklist with queuedId so user can trigger later
+                        addToWorklist({ diagnosis: 'Queued (Offline)', confidence: 'N/A', status: 'Offline', explanation: 'Queued for upload' }, 'UG-NEW', id);
+                    } catch (err) {
+                        console.error('Failed saving queued upload', err);
+                        alert('Unable to queue file for offline upload.');
+                    }
                     return;
                 }
 
@@ -172,7 +245,7 @@
             }
 
                     // addToWorklist: create a row and attach data for the review modal
-                    function addToWorklist(data, patientId) {
+                    function addToWorklist(data, patientId, queuedId) {
                         const isPriority = data.status === "Priority";
                         const tr = document.createElement('tr');
                         tr.className = `border-b border-gray-100 hover:bg-gray-50 ${isPriority ? 'bg-red-50' : ''}`;
@@ -183,6 +256,7 @@
                         tr.dataset.diagnosis = data.diagnosis || '';
                         tr.dataset.confidence = data.confidence || '';
                         tr.dataset.explanation = data.explanation || 'No additional details available.';
+                        if (queuedId) tr.dataset.queuedId = queuedId;
 
                         tr.innerHTML = `
                             <td class="p-4">
@@ -214,7 +288,7 @@
                     });
 
                     // Modal markup is below in DOM; helper to open/close and populate
-                    function openReviewModal(data) {
+                            function openReviewModal(data) {
                         const modal = document.getElementById('review-modal');
                         if (!modal) return;
                         modal.querySelector('#modal-patient-id').textContent = data.patientId || '';
@@ -222,6 +296,19 @@
                         modal.querySelector('#modal-diagnosis').textContent = data.diagnosis || '';
                         modal.querySelector('#modal-confidence').textContent = data.confidence ? data.confidence + '%' : '';
                         modal.querySelector('#modal-explanation').textContent = data.explanation || '';
+                                // store queuedId on modal so Scan Now can access it
+                                if (data.queuedId) modal.dataset.queuedId = data.queuedId; else delete modal.dataset.queuedId;
+                                const scanBtn = document.getElementById('modal-scan-now');
+                                if (scanBtn) {
+                                    if (modal.dataset.queuedId) {
+                                        // enable Scan Now only when a queuedId exists and we're online
+                                        scanBtn.disabled = !isOnline;
+                                        scanBtn.textContent = isOnline ? 'Scan Now' : 'Queued (offline)';
+                                    } else {
+                                        scanBtn.disabled = true;
+                                        scanBtn.textContent = 'Scan Now';
+                                    }
+                                }
                         modal.classList.remove('hidden');
                         // trap focus to modal for accessibility
                         modal.querySelector('[data-autofocus]')?.focus();
@@ -237,6 +324,81 @@
                     document.addEventListener('keydown', (e) => {
                         if (e.key === 'Escape') closeReviewModal();
                     });
+
+                    // Upload a queued file (called from modal Scan Now)
+                    async function scanQueuedFromModal() {
+                        const modal = document.getElementById('review-modal');
+                        const queuedId = modal.dataset.queuedId;
+                        if (!queuedId) {
+                            alert('No queued file attached to this case.');
+                            return;
+                        }
+                        if (!isOnline) {
+                            alert('Still offline. Scan will run when you restore connectivity.');
+                            return;
+                        }
+
+                        try {
+                            const record = await getUploadRecord(queuedId);
+                            if (!record) {
+                                alert('Queued file not found. It may have been already uploaded or removed.');
+                                return;
+                            }
+                            // show spinner in modal
+                            const scanBtn = document.getElementById('modal-scan-now');
+                            scanBtn.disabled = true; scanBtn.textContent = 'Scanning...';
+
+                            const formData = new FormData();
+                            formData.append('file', record.file, record.meta.name || 'upload.file');
+
+                            const res = await fetch(`${API_URL}/analyze`, { method: 'POST', body: formData });
+                            if (!res.ok) throw new Error('Upload failed: ' + res.status);
+                            const data = await res.json();
+
+                            // find the corresponding table row and update it
+                            const rows = Array.from(worklistBody.querySelectorAll('tr'));
+                            const row = rows.find(r => r.dataset.queuedId === queuedId);
+                            if (row) {
+                                // update row dataset and markup
+                                row.dataset.status = data.status || '';
+                                row.dataset.diagnosis = data.diagnosis || '';
+                                row.dataset.confidence = data.confidence || '';
+                                row.dataset.explanation = data.explanation || '';
+                                // replace innerHTML to reflect new values
+                                const isPriority = data.status === 'Priority';
+                                row.className = `border-b border-gray-100 hover:bg-gray-50 ${isPriority ? 'bg-red-50' : ''}`;
+                                row.innerHTML = `
+                                    <td class="p-4">
+                                        <span class="px-2 py-1 rounded text-xs font-bold ${isPriority ? 'bg-red-600 text-white priority-blink' : 'bg-gray-100 text-gray-600'}">
+                                            ${data.status}
+                                        </span>
+                                    </td>
+                                    <td class="p-4 font-medium">${row.dataset.patientId || ''}</td>
+                                    <td class="p-4">
+                                        <div class="font-semibold text-gray-800">${data.diagnosis}</div>
+                                        <div class="text-xs text-gray-500 italic mt-1">"${data.explanation || ''}"</div>
+                                    </td>
+                                    <td class="p-4 text-gray-600">${data.confidence}%</td>
+                                    <td class="p-4">
+                                        <button class="review-btn bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700" type="button">Review</button>
+                                    </td>
+                                `;
+                            }
+
+                            // remove upload record from IDB
+                            await deleteUploadRecord(queuedId);
+
+                            scanBtn.textContent = 'Done';
+                            setTimeout(() => { scanBtn.disabled = false; scanBtn.textContent = 'Scan Now'; }, 800);
+                            // refresh modal content to show result
+                            openReviewModal(row ? row.dataset : data);
+                        } catch (err) {
+                            console.error('Queued upload failed', err);
+                            alert('Queued upload failed: ' + (err.message || err));
+                            const scanBtn = document.getElementById('modal-scan-now');
+                            scanBtn.disabled = false; scanBtn.textContent = 'Scan Now';
+                        }
+                    }
 
             function updateNetworkUI() {
                 if (isOnline) {
@@ -272,6 +434,7 @@
                 </div>
                 <div class="p-4 border-t flex justify-end gap-2">
                     <button onclick="closeReviewModal()" class="px-4 py-2 rounded-md bg-gray-100">Close</button>
+                    <button id="modal-scan-now" onclick="scanQueuedFromModal()" class="px-4 py-2 rounded-md bg-green-600 text-white">Scan Now</button>
                     <button onclick="closeReviewModal()" class="px-4 py-2 rounded-md bg-blue-600 text-white">Mark Reviewed</button>
                 </div>
             </div>
